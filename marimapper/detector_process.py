@@ -93,6 +93,8 @@ class DetectorProcess(Process):
         backend_factory: partial,
         display: bool = True,
         check_movement=True,
+        resolution=None,
+        fourcc=None,
     ):
         super().__init__()
         self._request_detections_queue = RequestDetectionsQueue()  # {led_id, view_id}
@@ -108,6 +110,8 @@ class DetectorProcess(Process):
         self._led_backend_factory = backend_factory
         self._display = display
         self._check_movement = check_movement
+        self._resolution = resolution
+        self._fourcc = fourcc
 
     def get_input_3d_info_queue(self):
         return self._input_3d_info_queue
@@ -158,8 +162,18 @@ class DetectorProcess(Process):
                 close()
 
     def _detect(self, led_backend):
-        cam = Camera(self._device)
+        cam = Camera(self._device, self._resolution, self._fourcc)
+        try:
+            self._detect_with_camera(led_backend, cam)
+        finally:
+            # Restore camera controls and release USB capture on errors as well
+            # as normal exit. run() independently restores the LED backend.
+            try:
+                cam.reset()
+            finally:
+                cam.device.release()
 
+    def _detect_with_camera(self, led_backend, cam):
         timeout_controller = TimeoutController()
 
         # we quickly switch to dark mode here to throw any exceptions about the camera early
@@ -261,7 +275,6 @@ class DetectorProcess(Process):
                         )
 
         logger.info("detector closing, resetting camera and backend")
-        set_cam_default(cam)
         if not hasattr(led_backend, "close"):
             backend_black(led_backend)
             time.sleep(1)  # wait a moment for the backend to update before closing

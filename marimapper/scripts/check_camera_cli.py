@@ -29,16 +29,21 @@ def main():
 
     parse_common_args(args, logger)
 
-    cam = Camera(args.device)
+    cam = Camera(args.device, args.resolution, args.fourcc)
+    try:
+        set_cam_dark(cam, args.exposure)
 
-    set_cam_dark(cam, args.exposure)
+        logger.info(
+            "Camera connected! Hold an LED up to the camera to check LED identification"
+        )
 
-    logger.info(
-        "Camera connected! Hold an LED up to the camera to check LED identification"
-    )
-
-    while True:
-        find_led(cam, args.threshold)
+        while True:
+            find_led(cam, args.threshold)
+    finally:
+        try:
+            cam.reset()
+        finally:
+            cam.device.release()
 
 
 if __name__ == "__main__":

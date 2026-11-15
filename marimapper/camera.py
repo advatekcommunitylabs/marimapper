@@ -53,9 +53,20 @@ class CameraSettings:
 
 class Camera:
 
-    def __init__(self, device_id):
+    def __init__(self, device_id, resolution=None, fourcc=None):
         logger.info(f"Connecting to device {device_id} ...")
         self.device_id = device_id
+
+        if resolution is not None and (
+            len(resolution) != 2 or any(value <= 0 for value in resolution)
+        ):
+            raise ValueError("Camera resolution must be a positive width and height")
+        if fourcc is not None and len(fourcc) != 4:
+            raise ValueError("Camera FourCC must contain four characters")
+        if (resolution is not None or fourcc is not None) and not isinstance(
+            device_id, int
+        ):
+            raise ValueError("Resolution and FourCC selection require a local webcam")
 
         network = is_network_stream(device_id)
 
@@ -106,6 +117,32 @@ class Camera:
             )
 
         self.default_settings = CameraSettings(self)
+
+        try:
+            # Select the transport format before size. USB webcams may need MJPG
+            # to deliver their higher resolutions over the available bandwidth.
+            if fourcc is not None:
+                if not self.device.set(
+                    cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fourcc)
+                ):
+                    raise RuntimeError(f"Camera rejected capture format {fourcc}")
+            if resolution is not None:
+                width, height = resolution
+                self.device.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                self.device.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                # Drivers can accept a request but fall back to another size.
+                # Check a real frame, rather than trusting property readback.
+                frame = self.read()
+                actual = frame.shape[1], frame.shape[0]
+                if actual != tuple(resolution):
+                    raise RuntimeError(
+                        f"Requested camera resolution {width}x{height}, "
+                        f"received {actual[0]}x{actual[1]}"
+                    )
+                logger.info("Camera capture resolution: %dx%d", *actual)
+        except Exception:
+            self.device.release()
+            raise
 
     def reset(self):
         self.default_settings.apply(self)

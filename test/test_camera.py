@@ -6,6 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import cv2
 import numpy
 import pytest
+from unittest.mock import Mock
 from marimapper.camera import Camera, is_network_stream, parse_device
 from utils import get_test_dir
 
@@ -117,3 +118,94 @@ def test_unreachable_network_device():
 
     with pytest.raises(RuntimeError):
         Camera(parse_device("http://127.0.0.1:1/video"))  # nothing listens on port 1
+
+
+@pytest.fixture
+def webcam(monkeypatch):
+    device = Mock()
+    device.isOpened.return_value = True
+    device.get.return_value = 0
+    device.set.return_value = True
+    device.read.return_value = (True, numpy.zeros((1080, 1920, 3), numpy.uint8))
+    monkeypatch.setattr(cv2, "VideoCapture", lambda *args: device)
+    return device
+
+
+def test_requested_resolution_checks_actual_frame(webcam):
+    cam = Camera(1, resolution=(1920, 1080), fourcc="MJPG")
+    assert cam.read().shape == (1080, 1920, 3)
+    assert webcam.set.call_args_list == [
+        ((cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG")),),
+        ((cv2.CAP_PROP_FRAME_WIDTH, 1920),),
+        ((cv2.CAP_PROP_FRAME_HEIGHT, 1080),),
+    ]
+
+
+def test_resolution_fallback_is_rejected_and_camera_released(webcam):
+    with pytest.raises(RuntimeError, match="3840x2160.*1920x1080"):
+        Camera(1, resolution=(3840, 2160))
+    webcam.release.assert_called_once()
+
+
+def test_capture_format_rejection_releases_camera(webcam):
+    webcam.set.return_value = False
+    with pytest.raises(RuntimeError, match="capture format"):
+        Camera(1, fourcc="MJPG")
+    webcam.release.assert_called_once()
+
+
+def test_requested_resolution_requires_readable_frame(webcam):
+    webcam.read.return_value = (False, None)
+    with pytest.raises(Exception, match="Failed to read image"):
+        Camera(1, resolution=(1920, 1080))
+    webcam.release.assert_called_once()
+
+
+@pytest.mark.parametrize("resolution", [(0, 1080), (1920, -1), (1920,)])
+def test_invalid_resolution(resolution):
+    with pytest.raises(ValueError, match="resolution"):
+        Camera(1, resolution=resolution)
+
+
+def test_network_stream_resolution_must_be_set_at_source():
+    with pytest.raises(ValueError, match="local webcam"):
+        Camera("http://camera.local/video", resolution=(1920, 1080))
+
+
+def test_camera_cli_resolution_options():
+    import argparse
+    from marimapper.scripts.arg_tools import add_camera_args
+
+    parser = argparse.ArgumentParser()
+    add_camera_args(parser)
+    args = parser.parse_args(["--resolution", "3840", "2160", "--fourcc", "MJPG"])
+    assert args.resolution == [3840, 2160]
+    assert args.fourcc == "MJPG"
+    for options in [["--resolution", "0", "1080"], ["--fourcc", "MJPEG"]]:
+        with pytest.raises(SystemExit):
+            parser.parse_args(options)
+
+
+def test_detector_releases_camera_after_scan_error(monkeypatch):
+    from functools import partial
+    from marimapper.detector_process import DetectorProcess
+
+    camera = Mock()
+    constructor = Mock(return_value=camera)
+    monkeypatch.setattr("marimapper.detector_process.Camera", constructor)
+    detector = DetectorProcess(
+        device=1,
+        dark_exposure=-2,
+        threshold=80,
+        backend_factory=partial(Mock),
+        resolution=(3840, 2160),
+        fourcc="MJPG",
+    )
+    monkeypatch.setattr(
+        detector, "_detect_with_camera", Mock(side_effect=RuntimeError("scan failed"))
+    )
+    with pytest.raises(RuntimeError, match="scan failed"):
+        detector._detect(Mock())
+    constructor.assert_called_once_with(1, (3840, 2160), "MJPG")
+    camera.reset.assert_called_once()
+    camera.device.release.assert_called_once()

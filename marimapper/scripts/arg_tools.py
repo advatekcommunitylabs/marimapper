@@ -22,6 +22,19 @@ def add_camera_args(parser):
     )
 
     camera_options.add_argument(
+        "--resolution",
+        type=positive_int,
+        nargs=2,
+        metavar=("WIDTH", "HEIGHT"),
+        help="Local webcam capture size; fail if the camera delivers a different size",
+    )
+    camera_options.add_argument(
+        "--fourcc",
+        type=capture_fourcc,
+        help="Local webcam capture format, e.g. MJPG for high-resolution USB capture",
+    )
+
+    camera_options.add_argument(
         "--exposure",
         type=int,
         help="Camera exposure, the lower the value, the darker the image",
@@ -35,6 +48,19 @@ def add_camera_args(parser):
         help="LED detection threshold, increasing this number will reduce false positive detections",
         default=128,
     )
+
+
+def positive_int(text):
+    value = int(text)
+    if value <= 0:
+        raise argparse.ArgumentTypeError("Must be greater than zero")
+    return value
+
+
+def capture_fourcc(text):
+    if len(text) != 4 or not text.isascii():
+        raise argparse.ArgumentTypeError("FourCC must contain four ASCII characters")
+    return text
 
 
 def add_common_args(parser) -> None:

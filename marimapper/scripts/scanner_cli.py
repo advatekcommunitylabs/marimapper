@@ -59,6 +59,8 @@ def main():
         args.interpolation_max_error if args.interpolation_max_error != -1 else 10000,
         args.disable_movement_check,
         args.camera_model,
+        resolution=args.resolution,
+        fourcc=args.fourcc,
     )
 
     try:

@@ -61,6 +61,8 @@ class Scanner:
         interpolation_max_error: float,
         check_movement: bool,
         camera_model_name: str,
+        resolution=None,
+        fourcc=None,
     ):
         logger.debug("initialising scanner")
         set_start_method("spawn")  # VERY important, see top of file
@@ -73,6 +75,8 @@ class Scanner:
             backend_factory=backend_factory,
             display=True,
             check_movement=check_movement,
+            resolution=resolution,
+            fourcc=fourcc,
         )
 
         self.file_writer = FileWriterProcess(self.output_dir)

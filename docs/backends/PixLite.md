@@ -43,6 +43,35 @@ If illuminated pixels are too dim for the camera, increase `--brightness`
 from its default of 64, up to 255. This sets the test RGB level while leaving
 the controller's saved intensity settings in place.
 
+For a high-resolution local webcam, request the capture size explicitly. For
+example, with 41 connected logical LEDs on the first output:
+
+```sh
+marimapper_check_camera --device 1 --resolution 3840 2160 --fourcc MJPG --exposure -2 --threshold 80
+marimapper pixlite --server <controller-address> --device 1 --resolution 3840 2160 --fourcc MJPG --exposure -2 --threshold 80 --brightness 255 --start 0 --end 40
+```
+
+The UGREEN CM930 was checked delivering actual 3840x2160 frames with MJPG.
+Other cameras may need a different size or format. MariMapper checks a real
+frame and stops if the requested resolution is not delivered. Omitting these
+options keeps the camera's default capture format and size. Network stream
+resolution must be configured at its source.
+
+Test one port at a time. Set `--start` and `--end` to that port's logical index
+range, using the counts reported at startup with `--verbose`. The example
+above scans indices 0 through 40 only. It does not change the controller's
+configured string length or select later ports. MariMapper cannot determine
+how many pixels are physically connected from the configured count.
+
+Higher resolution does not by itself establish spatial accuracy. Keep the
+camera and string still, with every LED emitter directly visible. Check the
+first, middle and last LEDs before a full scan. Reflections on a wall or desk
+can be detected as valid points even when the actual emitter is obscured.
+Use the lowest brightness and exposure that reliably detect every LED, then
+repeat the scan to check coordinate stability. MariMapper pads the vertical
+axis to a square and normalizes both coordinates by image width; these are
+camera-space positions, not calibrated physical measurements.
+
 The backend uses the controller's administrator account for test-data mode.
 For a password-protected account, set the `PIXLITE_PASSWORD` environment
 variable and pass the full HTTPS URL (PixLite uses port 4443). The controller
