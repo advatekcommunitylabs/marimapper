@@ -90,6 +90,24 @@ def test_expanded_port_mapping_and_blackout(controller):
     assert controller["mode"] == "live"
 
 
+def test_brightness_applies_to_on_and_blackout_remains_zero(controller):
+    backend = Backend("pixlite.local", brightness=255)
+    backend.set_led(0, True)
+    assert controller["commands"][-1]["color"] == [255, 255, 255, 0]
+    backend.set_led(0, False)
+    assert controller["commands"][-1]["color"] == [0, 0, 0, 0]
+    backend.blackout()
+    assert controller["commands"][-1]["color"] == [0, 0, 0, 0]
+    backend.close()
+
+
+@pytest.mark.parametrize("brightness", [0, -1, 256])
+def test_brightness_out_of_range(controller, brightness):
+    with pytest.raises(ValueError, match="brightness"):
+        Backend("pixlite.local", brightness=brightness)
+    assert controller["commands"] == []
+
+
 def test_restores_live_mode_if_test_response_is_lost(controller):
     backend = Backend("pixlite.local")
     controller["timeout"] = True

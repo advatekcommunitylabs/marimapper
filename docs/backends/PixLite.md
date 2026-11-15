@@ -39,6 +39,10 @@ port layout and blinks logical LED 0. Use `--reference_led <index>` to check
 another logical LED, then Ctrl+C to return to live mode. Add `--verbose` to
 the scan command to see its port layout too.
 
+If illuminated pixels are too dim for the camera, increase `--brightness`
+from its default of 64, up to 255. This sets the test RGB level while leaving
+the controller's saved intensity settings in place.
+
 The backend uses the controller's administrator account for test-data mode.
 For a password-protected account, set the `PIXLITE_PASSWORD` environment
 variable and pass the full HTTPS URL (PixLite uses port 4443). The controller

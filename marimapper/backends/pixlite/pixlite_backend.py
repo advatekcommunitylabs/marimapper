@@ -15,10 +15,18 @@ def pixlite_backend_set_args(parser):
     parser.add_argument(
         "--server", required=True, help="PixLite host or HTTPS controller URL"
     )
+    parser.add_argument(
+        "--brightness",
+        type=int,
+        choices=range(1, 256),
+        default=64,
+        metavar="[1-255]",
+        help="Test RGB level for camera detection",
+    )
 
 
 def pixlite_backend_factory(args: argparse.Namespace):
-    return partial(Backend, args.server)
+    return partial(Backend, args.server, getattr(args, "brightness", 64))
 
 
 class PixLiteRequestError(RuntimeError):
@@ -28,7 +36,10 @@ class PixLiteRequestError(RuntimeError):
 class Backend:
     """Use PixLite Mk3 test-data mode to illuminate one logical pixel at a time."""
 
-    def __init__(self, server: str):
+    def __init__(self, server: str, brightness: int = 64):
+        if not 1 <= brightness <= 255:
+            raise ValueError("PixLite brightness must be between 1 and 255")
+        self.brightness = brightness
         base_url = server if "://" in server else f"http://{server}"
         url = urlsplit(base_url)
         if (
@@ -200,7 +211,7 @@ class Backend:
             # A request can take effect even if its response is lost.
             self.in_test_mode = True
 
-        color = [64 if on else 0] * 3 + [0] * (self.color_channels - 3)
+        color = [self.brightness if on else 0] * 3 + [0] * (self.color_channels - 3)
         try:
             result = self._request(
                 "modeTestData",
